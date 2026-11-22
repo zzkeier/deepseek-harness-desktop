@@ -64,26 +64,6 @@ afterAll(() => {
 })
 
 describe('navbar window close', () => {
-  it.each(['window-2', 'remote-2'])('closes the %s attached window instead of hiding it', async (label) => {
-    mockWindows(label)
-    render(<Navbar onRemoteChange={vi.fn()} />)
-
-    fireEvent.click(screen.getByLabelText('nav.close'))
-
-    await waitFor(() => expect(native).toHaveBeenCalledWith('plugin:window|close', expect.objectContaining({ label })))
-    expect(native).not.toHaveBeenCalledWith('plugin:window|hide', expect.anything())
-  })
-
-  it('hides the main window when its background button is clicked without requesting close', async () => {
-    mockWindows('main')
-    render(<Navbar onRemoteChange={vi.fn()} />)
-
-    fireEvent.click(screen.getByLabelText('nav.background'))
-
-    await waitFor(() => expect(native).toHaveBeenCalledWith('plugin:window|hide', expect.objectContaining({ label: 'main' })))
-    expect(native).not.toHaveBeenCalledWith('plugin:window|close', expect.anything())
-  })
-
   it.each(['main', 'window-2', 'remote-2'])('routes the File close action for %s to the matching native operation', async (label) => {
     mockWindows(label)
     render(<Navbar onRemoteChange={vi.fn()} />)
@@ -106,13 +86,5 @@ describe('navbar window close', () => {
       expect(chip).toBeNull()
     else
       expect(chip?.textContent).toBe('navbar.child_window')
-  })
-
-  it('keeps the main window close labeled as backgrounding to the tray', () => {
-    mockWindows('main')
-    render(<Navbar onRemoteChange={vi.fn()} />)
-
-    expect(screen.getByLabelText('nav.background')).toBeTruthy()
-    expect(screen.queryByLabelText('nav.close')).toBeNull()
   })
 })

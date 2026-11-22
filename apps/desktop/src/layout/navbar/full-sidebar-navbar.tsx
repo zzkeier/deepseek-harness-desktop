@@ -4,15 +4,14 @@
  * 「右侧栏 → 在新窗口全屏打开」建出的窗口用它（`presentation=full-sidebar`）：没有
  * sidebar-toggle、文件/视图/运行/帮助菜单，也没有远程与本地/远端切换——纯全屏阅读形态下
  * 这些都是噪音。左侧那枚 `LayoutHeader` 只是形态标记，不可聚焦、不可点击。
- * 窗口控制保留：非 macOS 的壳层窗口没有原生标题栏，去掉就关不掉。
+ * 窗口控制不再自绘：壳层窗口带系统标题栏（Linux / Windows 为 decorations(true)），
+ * 关闭与最小化交给窗口管理器，导航栏右端不再放按钮。
  */
 import { LayoutHeader } from '@gravity-ui/icons'
-import { If } from 'react-if-lite'
 import { cn } from 'tailwind-variants'
 import { useDshStyle } from '@/hooks/use-dsh-style'
 import { onDragRegionPointerDown, useMacOSFullscreen } from '@/hooks/use-window-chrome'
 import { IS_MACOS } from '@/utils/window-frame'
-import { WindowControls } from './window-controls'
 
 export function FullSidebarNavbar() {
   const isFullscreen = useMacOSFullscreen()
@@ -46,10 +45,6 @@ export function FullSidebarNavbar() {
         data-tauri-drag-region
         onPointerDown={onDragRegionPointerDown}
       />
-
-      <If cond={!IS_MACOS}>
-        <WindowControls />
-      </If>
     </div>
   )
 }

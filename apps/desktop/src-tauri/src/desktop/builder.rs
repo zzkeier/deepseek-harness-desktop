@@ -749,8 +749,10 @@ fn shell_window_transparent(appearance: &crate::config::Appearance) -> bool {
     }
 }
 
-fn shell_frame_for(transparent: bool) -> bool {
-    transparent && (cfg!(target_os = "linux") || cfg!(windows))
+/// 壳层是否自绘圆角外框。系统标题栏接管边框后（Linux / Windows 均为
+/// `decorations(true)`），自绘描边会与原生外框叠成双层，故恒关闭。
+fn shell_frame_for(_transparent: bool) -> bool {
+    false
 }
 
 struct NativeNotificationsAvailable(bool);
@@ -853,8 +855,10 @@ fn with_shell_chrome<'a>(
             crate::config::DshTheme::Dark => Some(tauri::Theme::Dark),
         });
 
+    // Linux / Windows 使用系统标题栏：壳层不再自绘最小化/最大化/关闭，关闭语义仍由
+    // CloseRequested 收口（主窗口收到关闭请求时 prevent_close + hide 到托盘）。
     #[cfg(not(target_os = "macos"))]
-    let builder = builder.decorations(false);
+    let builder = builder.decorations(true);
 
     #[cfg(not(any(windows, target_os = "macos")))]
     let _ = app;
@@ -1149,13 +1153,9 @@ mod shell_frame_tests {
     use super::shell_frame_for;
 
     #[test]
-    fn transparent_shells_draw_their_own_frame_where_the_os_stops_rounding() {
+    fn framed_shells_never_draw_their_own_frame_under_a_native_titlebar() {
         assert!(!shell_frame_for(false), "不透明窗沿用系统外框");
-        assert_eq!(
-            shell_frame_for(true),
-            cfg!(target_os = "linux") || cfg!(windows),
-            "Windows 透明窗拿不到 DWM 圆角，Linux 没有装饰边框，两边都要壳层自绘"
-        );
+        assert!(!shell_frame_for(true), "系统标题栏接管边框后壳层不再自绘描边");
     }
 }
 

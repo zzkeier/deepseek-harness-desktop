@@ -32,7 +32,6 @@ import { handleWindowAction } from '@/utils/window-actions'
 import { IS_MACOS } from '@/utils/window-frame'
 import { HelpMenu } from './help-menu'
 import { ShortcutLabel } from './shortcut-label'
-import { WindowControls } from './window-controls'
 
 const TAURI_PLUGIN_ID = 'dsh-tauri'
 
@@ -473,10 +472,6 @@ export function Navbar({ onRemoteChange, sidebarCollapsed = false, onToggleSideb
       </If>
 
       <RemoteSwitcher onChange={onRemoteChange} visible={onToggleSidebar != null} onManage={onOpenMachineManager} onSync={onOpenSyncToRemote} />
-
-      <If cond={!IS_MACOS}>
-        <WindowControls />
-      </If>
     </div>
   )
 }
