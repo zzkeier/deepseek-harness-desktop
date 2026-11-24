@@ -11,7 +11,10 @@ import { useTranslation } from 'react-i18next'
 import { Case, If, Switch } from 'react-if-lite'
 import { hooks } from '@/config/hooks'
 import { queryKeys } from '@/config/query-keys'
+import { useRemoteShellMachine } from '@/hooks/use-remote-shell'
 import { ConfigAppearance } from '@/ui/config/appearance'
+import { RemoteCoreSection } from '@/ui/config/components/remote-core'
+import { RemoteUnsupported } from '@/ui/config/components/remote-unsupported'
 import { ConfigCore } from '@/ui/config/core'
 import { ConfigDataDir } from '@/ui/config/data-dir'
 import { ConfigDebug } from '@/ui/config/debug'
@@ -47,6 +50,10 @@ export function ConfigDialog(props: ConfigDialogProps) {
   ]
 
   const [activeTab, setActiveTab] = useState<ConfigTab>(props.tab ?? 'application')
+  /** 当前窗口挂在哪台远端机器上；非空表示本窗口的 dsh 文档来自该机器 */
+  const remoteMachineId = useRemoteShellMachine()
+  /** 远端窗口里档案/插件/数据管的是发起端本机状态，只给提示；核心面板改为管理这台远端机器 */
+  const remoteBlocked = remoteMachineId !== null
 
   // 服务重启/退出前由 store 触发，命令式收起本对话框（卸载时自动注销）
   useListener(hooks['config.dialog.hidden'].on, disclosure.cancel)
@@ -99,16 +106,16 @@ export function ConfigDialog(props: ConfigDialogProps) {
                     <ConfigAppearance />
                   </Case>
                   <Case cond="profiles">
-                    <ConfigProfile />
+                    {remoteBlocked ? <RemoteUnsupported title={t('config.profiles')} /> : <ConfigProfile />}
                   </Case>
                   <Case cond="plugins">
-                    <ConfigPlugin />
+                    {remoteBlocked ? <RemoteUnsupported title={t('config.plugins')} /> : <ConfigPlugin />}
                   </Case>
                   <Case cond="harness">
-                    <ConfigCore />
+                    {remoteMachineId !== null ? <RemoteCoreSection machineId={remoteMachineId} /> : <ConfigCore />}
                   </Case>
                   <Case cond="dataDir">
-                    <ConfigDataDir />
+                    {remoteBlocked ? <RemoteUnsupported title={t('config.dataDir')} /> : <ConfigDataDir />}
                   </Case>
                 </Switch>
               </div>

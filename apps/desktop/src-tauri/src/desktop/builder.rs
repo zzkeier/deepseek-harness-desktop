@@ -72,6 +72,9 @@ pub fn setup(app_handle: crate::AppHandle) {
     if let Err(e) = crate::service::migrate::heal_stale_pnpm_metadata(&dsh_home) {
         log::warn!("pnpm modules metadata self-heal skipped: {e}");
     }
+    if let Err(e) = crate::service::migrate::remove_plugin_snapshots(&dsh_home) {
+        log::warn!("plugin snapshot cleanup skipped: {e}");
+    }
 
     if let Err(e) = crate::service::core::retire_directory_core(&app_handle) {
         log::warn!("legacy directory core retirement skipped: {e}");
@@ -165,13 +168,16 @@ fn build_tray<R: Runtime>(app: &crate::AppHandle<R>) -> tauri::Result<()> {
         }
     }
 
+    // macOS 上不给托盘项设 tooltip：NSStatusItem 处于不可见状态（菜单栏图标被系统挤进
+    // 不可见区、或被收起）时，对应 tooltip 收不到 mouseExited，会滞留成一块悬浮在产品名
+    // 上的小药丸（NSToolTip 窗口，窗口层级 103），无视 app 前后台盖在其它窗口上面。
+    // 托盘菜单里已有「打开面板 / 退出」，这个 tooltip 不提供额外信息。
     #[cfg(target_os = "macos")]
     let _ = TrayIconBuilder::new()
         .icon(icon)
         .icon_as_template(true)
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip(crate::desktop::product_name(app))
         .on_menu_event(move |app, event| handle_menu_event(app, &event))
         .on_tray_icon_event(move |tray, event| handle_tray_icon_event(tray, &event))
         .build(app)?;
@@ -1399,11 +1405,6 @@ pub fn handler() -> impl Fn(Invoke<ElectronRuntime>) -> bool + Send + Sync + 'st
         crate::bridge::remove_dsh_plugins,
         crate::bridge::disable_dsh_plugin,
         crate::bridge::enable_dsh_plugin,
-        crate::bridge::snapshot_plugin,
-        crate::bridge::snapshot_plugins,
-        crate::bridge::get_plugin_backup,
-        crate::bridge::restore_plugin,
-        crate::bridge::delete_plugin_backup,
         crate::bridge::report_plugin_error,
         crate::bridge::detect_plugin_recovery,
         crate::bridge::recover_plugin,

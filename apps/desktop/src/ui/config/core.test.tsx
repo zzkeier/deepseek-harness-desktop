@@ -6,7 +6,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { createInstance } from 'i18next'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { queryKeys } from '@/config/query-keys'
 import enUS from '@/i18n/locales/en-US.json'
 import { ConfigCore } from './core'
 
@@ -122,7 +121,7 @@ function expectManagedWarning() {
 beforeEach(async () => {
   vi.clearAllMocks()
   cores = [{ ...localFixture }, { ...managedFixture }]
-  updateVersion = '0.2.3-rc.1'
+  updateVersion = '0.3.0-rc.1'
   updateError = null
   coreAsar = true
   coreAsarError = null
@@ -228,7 +227,7 @@ describe('核心激活兼容性', () => {
     expect((screen.getByRole('button', { name: 'Open folder' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it.each(['0.2.1', '0.2.3-rc.1', '0.2.3'])('范围外的 app 版本不能激活：%s', async (version) => {
+  it.each(['0.2.1', '0.2.2-rc.0', '0.3.0'])('范围外的 app 版本不能激活：%s', async (version) => {
     cores = [{ ...managedFixture, version, active: false }]
     renderCore()
     fireEvent.click(await screen.findByRole('button', { name: 'Incompatible versions (1)' }))
@@ -240,6 +239,21 @@ describe('核心激活兼容性', () => {
 
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expectNoCoreOrProfileSwitch()
+  })
+
+  it('0.2.3 系列的 app 版本按受支持版本激活', async () => {
+    cores = [{ ...managedFixture, id: 'app-dsh-0.2.3-1', version: '0.2.3', tag: 'dsh-0.2.3-1', active: false }]
+    renderCore()
+
+    const checkbox = await screen.findByRole('checkbox', { name: '0.2.3' })
+    expect((checkbox as HTMLInputElement).disabled).toBe(false)
+    fireEvent.click(checkbox)
+
+    const dialog = await findDialog()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith('set_active_core', { id: 'app-dsh-0.2.3-1' }))
+    await waitFor(() => expect(mocks.restart).toHaveBeenCalledTimes(1))
   })
 
   it.each(['row', 'checkbox'])('远程已移除但无错误的 orphaned asar 核心仍可通过 %s 激活', async (target) => {
@@ -259,111 +273,15 @@ describe('核心激活兼容性', () => {
 })
 
 describe('本地核心更新档案安全', () => {
-  it('manages one target at a time: the local machine or a remote machine', async () => {
+  it('不再提供远端机器选择器，核心页只管理本机', async () => {
     mocks.loadRemoteMachines.mockResolvedValue({
       enabled: true,
       machines: [{ id: 'build', name: 'Build box', state: 'connected' }],
     })
-    mocks.getCoreCurrent.mockResolvedValue({
-      item: {
-        id: 'remote:build:remote',
-        scope: 'remote',
-        machineId: 'build',
-        remoteProfile: 'remote',
-        capabilities: ['listVersions', 'installVersion'],
-        platforms: ['linux-x64'],
-        availability: 'present',
-        slots: [{
-          kind: 'installed',
-          slotKey: 'dsh',
-          version: '0.2.4',
-          dir: '/home/remote/.dsh-desktop/dependencies/dsh',
-          active: true,
-          removable: false,
-          preview: false,
-        }],
-      },
-    })
     renderCore()
 
     expect(await screen.findByText('0.2.2-rc.1')).toBeTruthy()
-    expect(screen.queryByTestId('dsh-core-remote-list')).toBeNull()
-
-    const select = screen.getByTestId('dsh-config-core-target').closest('[data-slot="select"]')!.querySelector('select')!
-    fireEvent.change(select, { target: { value: 'remote:build' } })
-
-    expect(await screen.findByTestId('dsh-core-remote-list')).toBeTruthy()
-    expect(await screen.findByText('0.2.4')).toBeTruthy()
-    expect(screen.queryByText('0.2.2-rc.1')).toBeNull()
-  })
-
-  it('keeps a remote machine named local apart from the local core scope', async () => {
-    mocks.loadRemoteMachines.mockResolvedValue({
-      enabled: true,
-      machines: [{ id: 'local', name: 'Local box', state: 'connected' }],
-    })
-    mocks.getCoreCurrent.mockResolvedValue({
-      item: {
-        id: 'remote:local:remote',
-        scope: 'remote',
-        machineId: 'local',
-        remoteProfile: 'remote',
-        capabilities: ['listVersions', 'installVersion', 'activate'],
-        platforms: ['linux-x64'],
-        availability: 'present',
-        slots: [{
-          kind: 'installed',
-          slotKey: 'dsh',
-          version: '0.2.4',
-          dir: '/home/remote/.dsh-desktop/dependencies/dsh',
-          active: true,
-          removable: false,
-          preview: false,
-        }],
-      },
-    })
-    renderCore()
-
-    expect(await screen.findByText('0.2.2-rc.1')).toBeTruthy()
-    const select = screen.getByTestId('dsh-config-core-target').closest('[data-slot="select"]')!.querySelector('select')!
-    fireEvent.change(select, { target: { value: 'remote:local' } })
-
-    expect(await screen.findByTestId('dsh-core-remote-list')).toBeTruthy()
-    expect(await screen.findByText('0.2.4')).toBeTruthy()
-    expect(mocks.getCoreCurrent).toHaveBeenCalledWith({ machineId: 'local' })
-    expect(screen.queryByText('0.2.2-rc.1')).toBeNull()
-  })
-
-  it('falls back to the local core scope when the selected remote machine disappears', async () => {
-    mocks.loadRemoteMachines.mockResolvedValue({
-      enabled: true,
-      machines: [{ id: 'build', name: 'Build box', state: 'connected' }],
-    })
-    mocks.getCoreCurrent.mockResolvedValue({
-      item: {
-        id: 'remote:build:remote',
-        scope: 'remote',
-        machineId: 'build',
-        remoteProfile: 'remote',
-        capabilities: ['listVersions', 'installVersion', 'activate'],
-        platforms: ['linux-x64'],
-        availability: 'present',
-        slots: [],
-      },
-    })
-    const { client } = renderCore()
-    await waitFor(() => {
-      const option = screen.getByTestId('dsh-config-core-target').closest('[data-slot="select"]')?.querySelector('option[value="remote:build"]')
-      expect(option).not.toBeNull()
-    })
-    const select = screen.getByTestId('dsh-config-core-target').closest('[data-slot="select"]')!.querySelector('select')!
-    fireEvent.change(select, { target: { value: 'remote:build' } })
-    await screen.findByTestId('dsh-core-remote-list')
-
-    mocks.loadRemoteMachines.mockResolvedValue({ enabled: true, machines: [] })
-    await client.invalidateQueries({ queryKey: queryKeys.remoteMachines })
-
-    expect(await screen.findByText('0.2.2-rc.1')).toBeTruthy()
+    expect(screen.queryByTestId('dsh-config-core-target')).toBeNull()
     expect(screen.queryByTestId('dsh-core-remote-list')).toBeNull()
   })
 
@@ -384,7 +302,7 @@ describe('本地核心更新档案安全', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Update Local Core' }))
 
-    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('Local core updated: 0.2.3-rc.1', {
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('Local core updated: 0.3.0-rc.1', {
       variant: 'success',
       description: 'The desktop will keep using the current managed core. Switch back to the local core manually.',
       timeout: 10_000,
@@ -392,13 +310,13 @@ describe('本地核心更新档案安全', () => {
     expect(mocks.invoke).toHaveBeenCalledWith('update_local_core')
     expect((screen.getByRole('checkbox', { name: '0.2.2-rc.2' }) as HTMLInputElement).checked).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Incompatible versions (1)' }))
-    const updatedLocal = screen.getByRole('checkbox', { name: '0.2.3-rc.1' })
+    const updatedLocal = screen.getByRole('checkbox', { name: '0.3.0-rc.1' })
     expect((updatedLocal as HTMLInputElement).checked).toBe(false)
     fireEvent.click(updatedLocal)
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(mocks.toast).toHaveBeenLastCalledWith('Local core version is unsupported', {
       variant: 'warning',
-      description: 'This desktop supports only dsh 0.2.2, starting from 0.2.2-rc.1. Install a supported local version before switching back.',
+      description: 'This desktop supports only dsh 0.2, starting from 0.2.2-rc.1. Install a supported local version before switching back.',
       timeout: 10_000,
     })
     expectNoCoreOrProfileSwitch()
@@ -411,7 +329,7 @@ describe('本地核心更新档案安全', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Update Local Core' }))
 
-    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('Local core updated: 0.2.3-rc.1', {
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('Local core updated: 0.3.0-rc.1', {
       variant: 'success',
       description: 'The desktop will keep using the current managed core. Switch back to the local core manually.',
       timeout: 10_000,
@@ -663,12 +581,10 @@ describe('核心目录（依赖根）迁移', () => {
 })
 
 describe('面板头部控件顺序', () => {
-  it('高级选项开关排在管理范围（远端切换器）之前', async () => {
+  it('头部只保留高级选项开关与刷新，不再有机器选择器', async () => {
     renderCore()
 
-    const advanced = await screen.findByRole('switch', { name: 'Advanced options' })
-    const scope = screen.getByTestId('dsh-config-core-target')
-
-    expect(advanced.compareDocumentPosition(scope) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(await screen.findByRole('switch', { name: 'Advanced options' })).toBeTruthy()
+    expect(screen.queryByTestId('dsh-config-core-target')).toBeNull()
   })
 })
